@@ -17,6 +17,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Detect changed files
+        id: changes
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            backend:
+              - 'server/**'
+            frontend:
+              - 'client/**'
+            backend-deps:
+              - 'server/package-lock.json'
+            frontend-deps:
+              - 'client/package-lock.json'
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v3
         with:
@@ -30,44 +44,53 @@ jobs:
       # BACKEND SETUP
       # ------------------------------
       - name: Install backend dependencies
+        if: steps.changes.outputs.backend-deps == 'true'
         working-directory: ./server
         run: npm install
 
       - name: Create backend .env file
+        if: steps.changes.outputs.backend == 'true'
         working-directory: ./server
         run: |
           touch .env
           echo "${{ secrets.PROD_BACKEND_ENV }}" > .env
 
       - name: Start backend with PM2
+        if: steps.changes.outputs.backend == 'true'
         working-directory: ./server
         run: |
-           /home/ubuntu/.nvm/versions/node/v22.19.0/bin/pm2 restart backend || /home/ubuntu/.nvm/versions/node/v22.19.0/bin/pm2 start index.js --name backend
+          /home/ubuntu/.nvm/versions/node/v22.19.0/bin/pm2 restart backend || /home/ubuntu/.nvm/versions/node/v22.19.0/bin/pm2 start index.js --name backend
 
       # ------------------------------
       # FRONTEND SETUP
       # ------------------------------
       - name: Clean npm cache & remove existing dependencies
+        if: steps.changes.outputs.frontend-deps == 'true'
         working-directory: ./client
         run: |
           rm -rf node_modules package-lock.json
           npm cache clean --force
 
       - name: Install frontend dependencies
+        if: steps.changes.outputs.frontend-deps == 'true'
         working-directory: ./client
         run: npm install
 
       - name: Create frontend .env file
+        if: steps.changes.outputs.frontend == 'true'
         working-directory: ./client
         run: |
           touch .env
           echo "${{ secrets.PROD_FRONTEND_ENV }}" > .env
 
       - name: Build frontend
+        if: steps.changes.outputs.frontend == 'true'
         working-directory: ./client
         run: npm run build
 
       - name: Deploy frontend to Nginx
+        if: steps.changes.outputs.frontend == 'true'
         run: |
           sudo rm -rf /var/www/html/*
           sudo cp -r ./client/dist/* /var/www/html/
+
